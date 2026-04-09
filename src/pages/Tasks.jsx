@@ -10,13 +10,13 @@ export default function Tasks() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-  const [priority, setPriority] = useState("all");
-  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
+  // =========================
+  // FETCH
+  // =========================
   const fetchTasks = useCallback(async () => {
     if (!user) return;
 
@@ -33,8 +33,7 @@ export default function Tasks() {
 
       setTasks(data || []);
     } catch (e) {
-      console.error(e);
-      toast.error("Erro ao carregar tarefas.");
+      toast.error("Erro ao carregar tarefas");
     } finally {
       setLoading(false);
     }
@@ -44,27 +43,13 @@ export default function Tasks() {
     fetchTasks();
   }, [fetchTasks]);
 
-  const filtered = tasks.filter((t) => {
-    if (filter !== "all" && t.status !== filter) return false;
-    if (priority !== "all" && t.priority !== priority) return false;
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase()))
-      return false;
-    return true;
-  });
-
   // =========================
-  // SAVE (CREATE + UPDATE)
+  // SAVE
   // =========================
   const handleSave = async (form) => {
     try {
-      if (!user) {
-        toast.error("Usuário não autenticado");
-        return;
-      }
+      if (!user) return;
 
-      // =========================
-      // ✏️ EDIT
-      // =========================
       if (editing) {
         const oldTask = editing;
 
@@ -78,85 +63,78 @@ export default function Tasks() {
 
         if (error) throw error;
 
-        // 🔥 HISTÓRICO
-        const { error: historyError } = await supabase
-          .from("task_history")
-          .insert([
-            {
-              task_id: editing.id,
-              user_id: user.id,
-              action: "updated",
-              title: form.title,
-              old_value: oldTask,
-              new_value: form,
-            },
-          ]);
+        await supabase.from("task_history").insert([
+          {
+            task_id: editing.id,
+            user_id: user.id,
+            action: "updated",
+            old_value: JSON.stringify(oldTask),
+            new_value: JSON.stringify(form),
+          },
+        ]);
 
-        if (historyError) {
-          console.error("❌ ERRO HISTORY:", historyError);
-        } else {
-          console.log("✅ HISTORY SALVO (UPDATE)");
-        }
-
-        toast.success("Tarefa atualizada!");
-      }
-
-      // =========================
-      // 🆕 CREATE
-      // =========================
-      else {
+        toast.success("Tarefa atualizada");
+      } else {
         const { data, error } = await supabase
           .from("tasks")
           .insert([
             {
-              title: form.title,
-              description: form.description,
-              status: form.status,
-              priority: form.priority,
-              due_date: form.due_date || null,
+              ...form,
               created_by: user.id,
               assigned_to: user.id,
             },
           ])
-          .select();
+          .select()
+          .single();
 
-        if (error || !data || data.length === 0) {
-          console.error("❌ ERRO AO CRIAR TASK:", error);
-          toast.error("Erro ao criar tarefa");
-          return;
-        }
+        if (error) throw error;
 
-        const newTask = data[0];
+        await supabase.from("task_history").insert([
+          {
+            task_id: data.id,
+            user_id: user.id,
+            action: "created",
+            new_value: JSON.stringify(data),
+          },
+        ]);
 
-        console.log("🔥 TASK CRIADA:", newTask);
-
-        // 🔥 HISTÓRICO
-        const { error: historyError } = await supabase
-          .from("task_history")
-          .insert([
-            {
-              task_id: newTask.id,
-              user_id: user.id,
-              action: "created",
-              title: newTask.title,
-              new_value: newTask,
-            },
-          ]);
-
-        if (historyError) {
-          console.error("❌ ERRO HISTORY:", historyError);
-        } else {
-          console.log("✅ HISTORY SALVO (CREATE)");
-        }
-
-        toast.success("Tarefa criada!");
+        toast.success("Tarefa criada");
       }
 
+      setModalOpen(false);
       setEditing(null);
       fetchTasks();
     } catch (e) {
-      console.error("💥 ERRO REAL:", e);
-      toast.error(e.message || "Erro ao salvar tarefa");
+      console.error(e);
+      toast.error("Erro ao salvar");
+    }
+  };
+
+  // =========================
+  // CONCLUIR
+  // =========================
+  const handleComplete = async (task) => {
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: "done" })
+        .eq("id", task.id);
+
+      if (error) throw error;
+
+      await supabase.from("task_history").insert([
+        {
+          task_id: task.id,
+          user_id: user.id,
+          action: "completed",
+          new_value: JSON.stringify({ ...task, status: "done" }),
+        },
+      ]);
+
+      toast.success("Concluída!");
+      fetchTasks();
+    } catch {
+      toast.error("Erro ao concluir");
     }
   };
 
@@ -167,33 +145,24 @@ export default function Tasks() {
     try {
       setDeleting(task.id);
 
-      const { error: historyError } = await supabase
-        .from("task_history")
-        .insert([
-          {
-            task_id: task.id,
-            user_id: user.id,
-            action: "deleted",
-            title: task.title,
-            old_value: task,
-          },
-        ]);
-
-      if (historyError) {
-        console.error("❌ ERRO HISTORY:", historyError);
-      } else {
-        console.log("✅ HISTORY SALVO (DELETE)");
-      }
+      await supabase.from("task_history").insert([
+        {
+          task_id: task.id,
+          user_id: user.id,
+          action: "deleted",
+          old_value: JSON.stringify(task),
+        },
+      ]);
 
       const { error } = await supabase.from("tasks").delete().eq("id", task.id);
 
       if (error) throw error;
 
-      toast.success("Tarefa excluída.");
+      toast.success("Tarefa excluída");
       setTasks((prev) => prev.filter((t) => t.id !== task.id));
     } catch (e) {
       console.error(e);
-      toast.error("Erro ao excluir tarefa.");
+      toast.error("Erro ao excluir");
     } finally {
       setDeleting(null);
     }
@@ -214,37 +183,31 @@ export default function Tasks() {
         initial={editing}
       />
 
-      <main className="flex-1 p-8 overflow-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Minhas tarefas
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {filtered.length} tarefas encontradas
-            </p>
-          </div>
+      <main className="flex-1 p-8">
+        {/* HEADER */}
+        <div className="flex justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Minhas tarefas
+          </h1>
 
           <button
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-            className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+            onClick={() => setModalOpen(true)}
+            className="px-4 py-2 rounded-xl text-white font-semibold shadow"
             style={{ background: "var(--accent)" }}
           >
             + Nova tarefa
           </button>
         </div>
 
+        {/* LISTA */}
         {loading ? (
           <p className="text-gray-400">Carregando...</p>
         ) : (
           <div className="space-y-3">
-            {filtered.map((task) => (
+            {tasks.map((task) => (
               <div
                 key={task.id}
-                className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800"
+                className="group p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition"
               >
                 <div className="flex justify-between items-center">
                   <div>
@@ -254,25 +217,38 @@ export default function Tasks() {
                     <p className="text-xs text-gray-400">{task.description}</p>
                   </div>
 
-                  <div className="flex gap-2 items-center">
+                  <div className="flex items-center gap-2">
                     <PriorityBadge priority={task.priority} />
                     <StatusBadge status={task.status} />
 
+                    {/* CONCLUIR */}
+                    {task.status !== "done" && (
+                      <button
+                        onClick={() => handleComplete(task)}
+                        className="opacity-0 group-hover:opacity-100 transition text-xs px-2 py-1 rounded-lg bg-green-500/10 text-green-600 hover:bg-green-500/20"
+                      >
+                        ✔
+                      </button>
+                    )}
+
+                    {/* DELETE */}
+                    <button
+                      onClick={() => handleDelete(task)}
+                      disabled={deleting === task.id}
+                      className="opacity-0 group-hover:opacity-100 transition text-xs px-2 py-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                    >
+                      🗑
+                    </button>
+
+                    {/* EDIT */}
                     <button
                       onClick={() => {
                         setEditing(task);
                         setModalOpen(true);
                       }}
-                      className="text-xs text-blue-500"
+                      className="opacity-0 group-hover:opacity-100 transition text-xs text-blue-500"
                     >
                       Editar
-                    </button>
-
-                    <button
-                      onClick={() => handleDelete(task)}
-                      className="text-xs text-red-500"
-                    >
-                      Excluir
                     </button>
                   </div>
                 </div>
