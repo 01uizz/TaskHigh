@@ -3,6 +3,59 @@ import { supabase } from "../lib/supabase";
 import { useNavigate, Link } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
 
+// 🔥 NOVO: Componente do Sensor de Senha
+function PasswordStrengthSensor({ password }) {
+  const criteria = [
+    {
+      id: "length",
+      label: "Mínimo de 8 caracteres",
+      met: password.length >= 8,
+    },
+    { id: "upper", label: "Uma letra maiúscula", met: /[A-Z]/.test(password) },
+    { id: "lower", label: "Uma letra minúscula", met: /[a-z]/.test(password) },
+    { id: "number", label: "Um número", met: /[0-9]/.test(password) },
+    {
+      id: "special",
+      label: "Um caractere especial (@$!%*?&)",
+      met: /[^A-Za-z0-9]/.test(password),
+    },
+  ];
+
+  const metCount = criteria.filter((c) => c.met).length;
+  const progressPct = (metCount / criteria.length) * 100;
+
+  let barColor = "bg-red-500";
+  if (metCount >= 3) barColor = "bg-yellow-500";
+  if (metCount === 5) barColor = "bg-green-500";
+
+  if (!password) return null;
+
+  return (
+    <div className="mt-2 space-y-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+      <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full transition-all duration-300 ${barColor}`}
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+      <ul className="grid grid-cols-1 gap-1 text-xs">
+        {criteria.map((c) => (
+          <li
+            key={c.id}
+            className={`flex items-center gap-2 ${
+              c.met
+                ? "text-green-600 dark:text-green-400 font-medium"
+                : "text-gray-500"
+            }`}
+          >
+            {c.met ? "✅" : "❌"} {c.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function Register() {
   const navigate = useNavigate();
 
@@ -11,8 +64,17 @@ export default function Register() {
   const [accessMode, setAccessMode] = useState("user");
   const [loading, setLoading] = useState(false);
 
+  // Verifica se a senha atende a TODOS os critérios
+  const isPasswordValid =
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password);
+
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!isPasswordValid) return; // Trava de segurança extra
 
     try {
       setLoading(true);
@@ -24,7 +86,7 @@ export default function Register() {
 
       if (error) throw error;
 
-      toast.success("Conta criada com sucesso!");
+      toast.success("Conta criada com sucesso! Você já pode fazer login.");
       navigate("/login");
     } catch (err) {
       console.error(err);
@@ -92,19 +154,23 @@ export default function Register() {
             required
           />
 
-          <input
-            type="password"
-            placeholder="Senha"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm outline-none focus:ring-2 focus:ring-violet-500"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div>
+            <input
+              type="password"
+              placeholder="Senha"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            {/* 🔥 NOVO: Exibe o sensor abaixo do input */}
+            <PasswordStrengthSensor password={password} />
+          </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl text-white font-medium text-sm"
+            disabled={loading || (!isPasswordValid && password.length > 0)}
+            className="w-full py-3 rounded-xl text-white font-medium text-sm transition-opacity disabled:opacity-50"
             style={{ background: "var(--accent)" }}
           >
             {loading ? "Criando..." : "Criar conta"}

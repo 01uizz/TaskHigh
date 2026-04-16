@@ -10,6 +10,7 @@ import Sidebar from "./components/Sidebar";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ResetPassword from "./pages/ResetPassword"; // 🔥 NOVO: Importação da tela de reset
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
 import History from "./pages/History";
@@ -51,6 +52,9 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+
+            {/* 🔥 NOVO: Rota para a tela de criar nova senha */}
+            <Route path="/reset-password" element={<ResetPassword />} />
 
             <Route
               path="/"

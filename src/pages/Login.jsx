@@ -35,7 +35,27 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao entrar");
+      toast.error("Erro ao entrar. Verifique suas credenciais.");
+    }
+  };
+
+  // 🔥 CORRIGIDO: Função de Esqueci a Senha agora aponta para a rota correta
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Por favor, digite seu e-mail no campo acima primeiro.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // Agora a URL bate exatamente com o path configurado no App.jsx
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
+      toast.success("Link de recuperação enviado! Verifique seu e-mail.");
+    } catch (err) {
+      toast.error("Erro ao enviar e-mail: " + err.message);
     }
   };
 
@@ -99,14 +119,26 @@ export default function Login() {
             required
           />
 
-          <input
-            type="password"
-            placeholder="Senha"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm outline-none focus:ring-2 focus:ring-violet-500"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div>
+            <input
+              type="password"
+              placeholder="Senha"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            {/* 🔥 NOVO: Botão Esqueci a senha */}
+            <div className="flex justify-end mt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+          </div>
 
           <button
             type="submit"
